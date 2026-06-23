@@ -57,8 +57,8 @@ public class PodHealthChecker {
         return false;
     }
 
-    private boolean isCrashOrImageLooping(V1Pod pod){
-        if (pod.getStatus().getContainerStatuses() == null) return false;
+    public boolean isCrashOrImageLooping(V1Pod pod){
+        if (pod.getStatus()==null || pod.getStatus().getContainerStatuses() == null) return false;
         return pod.getStatus().getContainerStatuses().stream().anyMatch(cs -> {
             V1ContainerState state = cs.getState();
             boolean waitingCrashLoop = state.getWaiting() != null
