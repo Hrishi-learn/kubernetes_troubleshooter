@@ -6,7 +6,8 @@ import com.k8s_troubleshooter.cli_service.k8s.PodHealthChecker;
 import com.k8s_troubleshooter.cli_service.k8s.dto.PodSnapshot;
 import com.k8s_troubleshooter.cli_service.llm.LLMClient;
 import com.k8s_troubleshooter.cli_service.llm.PromptBuilder;
-import com.k8s_troubleshooter.cli_service.llm.dto.DiagnosisResult;
+import com.k8s_troubleshooter.cli_service.diagnosis.dto.DiagnosisResult;
+import com.k8s_troubleshooter.cli_service.llm.dto.LLMResponse;
 import com.k8s_troubleshooter.cli_service.logs.LogTrimmer;
 import io.kubernetes.client.openapi.ApiException;
 import io.kubernetes.client.openapi.models.*;
@@ -27,7 +28,7 @@ public class DiagnosisService {
     private final PromptBuilder promptBuilder;
     private final LogTrimmer logTrimmer;
 
-    public void diagnosisNamespace(String namespace){
+    public List<DiagnosisResult> diagnosisNamespace(String namespace){
 
         List<V1Pod>podList = Collections.emptyList();
         try{
@@ -35,6 +36,11 @@ public class DiagnosisService {
         }catch (ApiException e) {
             System.out.println("Unable to fetch the pods");
         }
+        if(podList.isEmpty()){
+            System.out.println("No pods found for namespace:" + namespace);
+            return Collections.emptyList();
+        }
+
         List<V1Pod>unhealthyPodsList = new ArrayList<>();
 
         for(V1Pod pod:podList){
@@ -42,9 +48,15 @@ public class DiagnosisService {
                 unhealthyPodsList.add(pod);
             }
         }
+        if(unhealthyPodsList.isEmpty()){
+            System.out.println("No unhealthy pods found for namespace:" + namespace);
+            return Collections.emptyList();
+        }
 
         List<PodSnapshot>snapshots = new ArrayList<>();
-
+    /*
+        Todo: Currently fetching waiting reason and restartCount for one container, can be extended to multiple container inside a pod.
+    */
         for(V1Pod pod: unhealthyPodsList){
             List<CoreV1Event>events = Collections.emptyList();
             String podName = "";
@@ -82,19 +94,20 @@ public class DiagnosisService {
             PodSnapshot podSnapshot = new PodSnapshot(podName,namespace,phase,waitingReason,restartCount,eventMessages,logs);
             snapshots.add(podSnapshot);
         }
-
+        List<DiagnosisResult>diagnosisResults = new ArrayList<>();
         for(PodSnapshot snapshot:snapshots){
             String trimmedLogs = logTrimmer.trim(snapshot.rawLogs());
             String prompt = promptBuilder.buildPrompt(snapshot,trimmedLogs);
 
             try{
-                DiagnosisResult result = llmClient.llmCall(prompt);
-                print(snapshot,result);
+                LLMResponse response = llmClient.llmCall(prompt);
+                DiagnosisResult result = new DiagnosisResult(snapshot.podName(),response.rootCause(),response.suggestedFix(),response.failureCategory());
+                diagnosisResults.add(result);
             }catch (JsonProcessingException e) {
                 System.out.println("Failed to parse LLM response for pod: " + snapshot.podName());
             }
         }
-
+        return diagnosisResults;
     }
     private String getWaitingReason(V1Pod pod){
         if (pod.getStatus()==null || pod.getStatus().getContainerStatuses() == null){
@@ -130,11 +143,5 @@ public class DiagnosisService {
         return  containerStatuses.get(0).getRestartCount();
     }
 
-    private void print(PodSnapshot snapshot,DiagnosisResult result){
-        System.out.println("PodName: " + snapshot.podName() + "\n");
-        System.out.println("Failure_Category: "+ result.failureCategory() + "\n");
-        System.out.println("Root Cause: "+ result.rootCause() + "\n");
-        System.out.println("Suggested Fix: "+ result.suggestedFix() + "\n");
-    }
 
 }

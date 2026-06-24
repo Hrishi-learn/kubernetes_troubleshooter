@@ -6,11 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.k8s_troubleshooter.cli_service.config.LLMConfigProperties;
 import com.k8s_troubleshooter.cli_service.llm.dto.ChatRequest;
 import com.k8s_troubleshooter.cli_service.llm.dto.ChatResponse;
-import com.k8s_troubleshooter.cli_service.llm.dto.DiagnosisResult;
+import com.k8s_troubleshooter.cli_service.llm.dto.LLMResponse;
 import com.k8s_troubleshooter.cli_service.llm.dto.Message;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -24,7 +22,7 @@ public class LLMClient{
     private final static String role = "user";
     private final LLMConfigProperties props;
 
-    public DiagnosisResult llmCall(String prompt) throws JsonProcessingException {
+    public LLMResponse llmCall(String prompt) throws JsonProcessingException {
         ChatRequest request = new ChatRequest(List.of(new Message(role,prompt)),props.model());
 
         ChatResponse response = restClient.post().uri(props.baseUrl()).body(request).header("content-type", "application/json")
@@ -37,7 +35,7 @@ public class LLMClient{
         ObjectMapper objectMapper = new ObjectMapper()
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-        DiagnosisResult result = objectMapper.readValue(rawContent,DiagnosisResult.class);
+        LLMResponse result = objectMapper.readValue(rawContent,LLMResponse.class);
 
         return result;
     }
