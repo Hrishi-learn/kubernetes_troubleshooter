@@ -5,12 +5,11 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
+import org.springframework.boot.persistence.autoconfigure.EntityScan;
 
-@SpringBootApplication(exclude = {
-DataSourceAutoConfiguration.class,
-HibernateJpaAutoConfiguration.class
-})
+@SpringBootApplication
 @ConfigurationPropertiesScan
+@EntityScan("com.k8s_troubleshooter.common.entity")
 public class CliServiceApplication {
 
 	public static void main(String[] args) {

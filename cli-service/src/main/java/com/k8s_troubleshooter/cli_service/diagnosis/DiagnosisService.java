@@ -9,6 +9,9 @@ import com.k8s_troubleshooter.cli_service.llm.PromptBuilder;
 import com.k8s_troubleshooter.cli_service.diagnosis.dto.DiagnosisResult;
 import com.k8s_troubleshooter.cli_service.llm.dto.LLMResponse;
 import com.k8s_troubleshooter.cli_service.logs.LogTrimmer;
+import com.k8s_troubleshooter.cli_service.repository.DiagnosisRepository;
+import com.k8s_troubleshooter.common.FailureCategory;
+import com.k8s_troubleshooter.common.entity.Diagnosis;
 import io.kubernetes.client.openapi.ApiException;
 import io.kubernetes.client.openapi.models.*;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +30,7 @@ public class DiagnosisService {
     private final LLMClient llmClient;
     private final PromptBuilder promptBuilder;
     private final LogTrimmer logTrimmer;
+    private final DiagnosisRepository diagnosisRepository;
 
     public List<DiagnosisResult> diagnosisNamespace(String namespace){
 
@@ -103,12 +107,19 @@ public class DiagnosisService {
                 LLMResponse response = llmClient.llmCall(prompt);
                 DiagnosisResult result = new DiagnosisResult(snapshot.podName(),response.rootCause(),response.suggestedFix(),response.failureCategory());
                 diagnosisResults.add(result);
+                saveToDb(snapshot,result);
             }catch (JsonProcessingException e) {
                 System.out.println("Failed to parse LLM response for pod: " + snapshot.podName());
             }
         }
         return diagnosisResults;
     }
+    private void saveToDb(PodSnapshot snapshot, DiagnosisResult diagnosisResult){
+        FailureCategory failureCategory = (diagnosisResult.failureCategory()==null)?FailureCategory.Unknown:diagnosisResult.failureCategory();
+        Diagnosis diagnosis = new Diagnosis(snapshot.podName(),snapshot.namespace(),"",failureCategory,diagnosisResult.rootCause(),diagnosisResult.suggestedFix(), snapshot.rawLogs());
+        diagnosisRepository.save(diagnosis);
+    }
+
     private String getWaitingReason(V1Pod pod){
         if (pod.getStatus()==null || pod.getStatus().getContainerStatuses() == null){
             return "";
